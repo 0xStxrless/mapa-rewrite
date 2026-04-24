@@ -117,3 +117,30 @@ INSERT INTO categories (name, color) VALUES ($1, $2) RETURNING *;
 
 -- name: DeleteCategory :exec
 DELETE FROM categories WHERE name = $1;
+
+-- name: GetPin :one
+SELECT * FROM pins WHERE id = $1;
+
+-- name: ListPins :many
+SELECT * FROM pins ORDER BY created_at DESC;
+
+-- name: ListPinsByCategory :many
+SELECT * FROM pins WHERE category = $1 ORDER BY created_at DESC;
+
+-- name: CreatePin :one
+INSERT INTO pins (title, description, lat, lng, category, image_url)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
+-- name: UpdatePin :one
+UPDATE pins
+SET title = $2, description = $3, lat = $4, lng = $5,
+    category = $6, image_url = $7, updated_at = now(), version = version + 1
+WHERE id = $1
+RETURNING *;
+
+-- name: DeletePin :exec
+DELETE FROM pins WHERE id = $1;
+
+-- name: IncrementPinVisits :exec
+UPDATE pins SET visits_count = COALESCE(visits_count, 0) + 1 WHERE id = $1;

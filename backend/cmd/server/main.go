@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+
 	godotenv.Load()
 	ctx := context.Background()
 
@@ -17,5 +18,5 @@ func main() {
 		panic(err)
 	}
 	queries := db.New(pool)
-	_ = queries
+
 }

@@ -76,6 +76,47 @@ func (q *Queries) CreatePatrolPlan(ctx context.Context, arg CreatePatrolPlanPara
 	return i, err
 }
 
+const createPin = `-- name: CreatePin :one
+INSERT INTO pins (title, description, lat, lng, category, image_url)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count
+`
+
+type CreatePinParams struct {
+	Title       string      `db:"title" json:"title"`
+	Description pgtype.Text `db:"description" json:"description"`
+	Lat         float64     `db:"lat" json:"lat"`
+	Lng         float64     `db:"lng" json:"lng"`
+	Category    string      `db:"category" json:"category"`
+	ImageUrl    pgtype.Text `db:"image_url" json:"image_url"`
+}
+
+func (q *Queries) CreatePin(ctx context.Context, arg CreatePinParams) (Pin, error) {
+	row := q.db.QueryRow(ctx, createPin,
+		arg.Title,
+		arg.Description,
+		arg.Lat,
+		arg.Lng,
+		arg.Category,
+		arg.ImageUrl,
+	)
+	var i Pin
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Lat,
+		&i.Lng,
+		&i.Category,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+		&i.VisitsCount,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
@@ -148,6 +189,15 @@ DELETE FROM patrol_plans WHERE id = $1
 
 func (q *Queries) DeletePatrolPlan(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deletePatrolPlan, id)
+	return err
+}
+
+const deletePin = `-- name: DeletePin :exec
+DELETE FROM pins WHERE id = $1
+`
+
+func (q *Queries) DeletePin(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deletePin, id)
 	return err
 }
 
@@ -253,6 +303,29 @@ func (q *Queries) GetPatrolPlanWithPins(ctx context.Context, patrolPlanID int32)
 		return nil, err
 	}
 	return items, nil
+}
+
+const getPin = `-- name: GetPin :one
+SELECT id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count FROM pins WHERE id = $1
+`
+
+func (q *Queries) GetPin(ctx context.Context, id int32) (Pin, error) {
+	row := q.db.QueryRow(ctx, getPin, id)
+	var i Pin
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Lat,
+		&i.Lng,
+		&i.Category,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+		&i.VisitsCount,
+	)
+	return i, err
 }
 
 const getStatsByMonth = `-- name: GetStatsByMonth :many
@@ -434,6 +507,15 @@ func (q *Queries) GetVisitsByPin(ctx context.Context, pinID int32) ([]Visit, err
 	return items, nil
 }
 
+const incrementPinVisits = `-- name: IncrementPinVisits :exec
+UPDATE pins SET visits_count = COALESCE(visits_count, 0) + 1 WHERE id = $1
+`
+
+func (q *Queries) IncrementPinVisits(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, incrementPinVisits, id)
+	return err
+}
+
 const listAppUpdates = `-- name: ListAppUpdates :many
 
 SELECT id, version, title, description, features, released_at FROM app_updates ORDER BY released_at DESC
@@ -523,6 +605,78 @@ func (q *Queries) ListPatrolPlans(ctx context.Context) ([]PatrolPlan, error) {
 	return items, nil
 }
 
+const listPins = `-- name: ListPins :many
+SELECT id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count FROM pins ORDER BY created_at DESC
+`
+
+func (q *Queries) ListPins(ctx context.Context) ([]Pin, error) {
+	rows, err := q.db.Query(ctx, listPins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Pin
+	for rows.Next() {
+		var i Pin
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPinsByCategory = `-- name: ListPinsByCategory :many
+SELECT id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count FROM pins WHERE category = $1 ORDER BY created_at DESC
+`
+
+func (q *Queries) ListPinsByCategory(ctx context.Context, category string) ([]Pin, error) {
+	rows, err := q.db.Query(ctx, listPinsByCategory, category)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Pin
+	for rows.Next() {
+		var i Pin
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markUpdateViewed = `-- name: MarkUpdateViewed :one
 INSERT INTO user_updates_viewed (user_id, update_id)
 VALUES ($1, $2)
@@ -584,6 +738,51 @@ UPDATE users SET last_login = now() WHERE id = $1
 func (q *Queries) UpdateLastLogin(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, updateLastLogin, id)
 	return err
+}
+
+const updatePin = `-- name: UpdatePin :one
+UPDATE pins
+SET title = $2, description = $3, lat = $4, lng = $5,
+    category = $6, image_url = $7, updated_at = now(), version = version + 1
+WHERE id = $1
+RETURNING id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count
+`
+
+type UpdatePinParams struct {
+	ID          int32       `db:"id" json:"id"`
+	Title       string      `db:"title" json:"title"`
+	Description pgtype.Text `db:"description" json:"description"`
+	Lat         float64     `db:"lat" json:"lat"`
+	Lng         float64     `db:"lng" json:"lng"`
+	Category    string      `db:"category" json:"category"`
+	ImageUrl    pgtype.Text `db:"image_url" json:"image_url"`
+}
+
+func (q *Queries) UpdatePin(ctx context.Context, arg UpdatePinParams) (Pin, error) {
+	row := q.db.QueryRow(ctx, updatePin,
+		arg.ID,
+		arg.Title,
+		arg.Description,
+		arg.Lat,
+		arg.Lng,
+		arg.Category,
+		arg.ImageUrl,
+	)
+	var i Pin
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Lat,
+		&i.Lng,
+		&i.Category,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+		&i.VisitsCount,
+	)
+	return i, err
 }
 
 const upsertStreetworkStat = `-- name: UpsertStreetworkStat :one
