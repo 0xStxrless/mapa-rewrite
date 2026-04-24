@@ -31,7 +31,7 @@ func (h *App) GetPin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(pin)
+	h.jsonEnc.Encode(pin)
 }
 
 func (h *App) UpdatePin(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +57,7 @@ func (h *App) UpdatePin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(pin)
+	h.jsonEnc.Encode(pin)
 }
 
 func (h *App) DeletePin(w http.ResponseWriter, r *http.Request) {
@@ -71,5 +71,4 @@ func (h *App) DeletePin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pin Couldn't be deleted", http.StatusBadRequest)
 		return
 	}
-
 }
