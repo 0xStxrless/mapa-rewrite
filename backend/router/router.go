@@ -1,10 +1,17 @@
 package router
 
 import (
+	"log"
 	"net/http"
 
+	"github.com/0xstxrless/punkt/backend/internal/db"
 	"github.com/go-chi/chi/v5"
 )
+
+type App struct {
+	queries *db.Queries
+	logger  log.Logger
+}
 
 func NewRouter(h *App) http.Handler {
 	r := chi.NewRouter()

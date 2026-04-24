@@ -2,16 +2,10 @@ package router
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/0xstxrless/punkt/backend/internal/db"
 )
-
-type App struct {
-	queries *db.Queries
-	logger  log.Logger
-}
 
 func (h *App) GetPins(w http.ResponseWriter, r *http.Request) {
 	pins, err := h.queries.ListPins(r.Context())
@@ -23,7 +17,7 @@ func (h *App) GetPins(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *App) GetPin(w http.ResponseWriter, r *http.Request) {
-	pinID, err := h.paramIDtoInt(w, r)
+	pinID, err := h.paramIDtoInt(r)
 	if err != nil {
 		http.Error(w, "Invalid pin ID", http.StatusNotFound)
 		return
@@ -41,7 +35,7 @@ func (h *App) GetPin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *App) UpdatePin(w http.ResponseWriter, r *http.Request) {
-	pinID, err := h.paramIDtoInt(w, r)
+	pinID, err := h.paramIDtoInt(r)
 	if err != nil {
 		http.Error(w, "Invalid pin ID", http.StatusNotFound)
 		return
@@ -67,7 +61,7 @@ func (h *App) UpdatePin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *App) DeletePin(w http.ResponseWriter, r *http.Request) {
-	pinID, err := h.paramIDtoInt(w, r)
+	pinID, err := h.paramIDtoInt(r)
 	if err != nil {
 		http.Error(w, "Invalid pin ID", http.StatusNotFound)
 		return

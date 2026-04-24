@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (h *App) paramIDtoInt(w http.ResponseWriter, r *http.Request) (int, error) {
+func (h *App) paramIDtoInt(r *http.Request) (int, error) {
 	pinIDStr := chi.URLParam(r, "id")
 	pinID, err := strconv.Atoi(pinIDStr)
 	if err != nil {
