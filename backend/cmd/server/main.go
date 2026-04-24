@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/0xstxrless/punkt/backend/internal/db"
@@ -18,5 +19,6 @@ func main() {
 		panic(err)
 	}
 	queries := db.New(pool)
+	fmt.Println(queries)
 
 }

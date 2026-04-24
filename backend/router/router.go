@@ -3,11 +3,10 @@ package router
 import (
 	"net/http"
 
-	"github.com/0xstxrless/punkt/backend/handlers"
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(h *handlers.AppHandler) http.Handler {
+func NewRouter(h *App) http.Handler {
 	r := chi.NewRouter()
 
 	// r.Post("/login/auth") // implement this when you get just all of mock data lol
@@ -18,4 +17,6 @@ func NewRouter(h *handlers.AppHandler) http.Handler {
 		r.Get("/pin/{id}", h.GetPin)
 
 	})
+
+	return r
 }

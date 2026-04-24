@@ -17,4 +17,5 @@ func (h *App) paramIDtoInt(w http.ResponseWriter, r *http.Request) (int, error) 
 	if pinID < 0 {
 		return 0, err
 	}
+	return pinID, nil
 }
