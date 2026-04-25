@@ -1,3 +1,4 @@
+// this package is responsible for all CRUD operations on DB
 package router
 
 import (
