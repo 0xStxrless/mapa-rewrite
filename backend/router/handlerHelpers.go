@@ -13,7 +13,10 @@ import (
 )
 
 func (h *App) paramIDtoInt(r *http.Request) (int, error) {
-	pinIDStr := chi.URLParam(r, "id")
+	pinIDStr, err := h.sanitize(chi.URLParam(r, "id"), CHARLIMIT)
+	if err != nil {
+		return 0, err
+	}
 	pinID, err := strconv.Atoi(pinIDStr)
 	if err != nil {
 		return 0, err
@@ -27,7 +30,6 @@ func (h *App) paramIDtoInt(r *http.Request) (int, error) {
 
 func (h *App) logError(msg string,
 	w http.ResponseWriter,
-	r *http.Request,
 	code int,
 	err error,
 ) {

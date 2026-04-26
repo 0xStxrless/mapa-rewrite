@@ -52,6 +52,16 @@ func TestIsValidHex(t *testing.T) {
 			Expect: true,
 			Got:    router.IsValidHex("#CCAACC"),
 		},
+		{
+			Name:   "Too long hex",
+			Expect: false,
+			Got:    router.IsValidHex("#AABBCCDD"),
+		},
+		{
+			Name:   "Empty string",
+			Expect: false,
+			Got:    router.IsValidHex(""),
+		},
 	}
 
 	for _, test := range tests {

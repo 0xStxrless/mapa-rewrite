@@ -5,7 +5,38 @@ import (
 	"net/http"
 
 	"github.com/0xstxrless/punkt/backend/internal/db"
+	"github.com/go-chi/chi/v5"
 )
+
+func (h *App) CreatePin(w http.ResponseWriter, r *http.Request) {
+	var params db.CreatePinParams
+	if err := h.jsonDec.Decode(&params); err != nil {
+		h.logError("Invalid pin parameters", w, http.StatusBadRequest, err)
+		return
+	}
+
+	var err error
+	params.Title, err = h.sanitize(params.Title, CHARLIMIT)
+	if err != nil {
+		h.logError("Invalid param title", w, http.StatusBadRequest, err)
+		return
+	}
+
+	params.Category, err = h.sanitize(params.Category, CHARLIMIT)
+	if err != nil {
+		h.logError("Invalid param category", w, http.StatusBadRequest, err)
+		return
+	}
+
+	pin, err := h.queries.CreatePin(r.Context(), params)
+	if err != nil {
+		h.logError("Couldn't create pin", w, http.StatusBadRequest, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	h.jsonEnc.Encode(pin)
+}
 
 func (h *App) GetPins(w http.ResponseWriter, r *http.Request) {
 	pins, err := h.queries.ListPins(r.Context())
@@ -14,6 +45,9 @@ func (h *App) GetPins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.logger.Println("Fetched pins:", pins)
+
+	w.Header().Set("Content-Type", "application/json")
+	h.jsonEnc.Encode(pins)
 }
 
 func (h *App) GetPin(w http.ResponseWriter, r *http.Request) {
@@ -71,4 +105,21 @@ func (h *App) DeletePin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pin Couldn't be deleted", http.StatusBadRequest)
 		return
 	}
+}
+
+func (h *App) ListPinsByCategory(w http.ResponseWriter, r *http.Request) {
+	category, err := h.sanitize(chi.URLParam(r, "category"), CHARLIMIT)
+	if err != nil {
+		h.logError("Invalid category name", w, http.StatusBadRequest, err)
+		return
+	}
+
+	pins, err := h.queries.ListPinsByCategory(r.Context(), category)
+	if err != nil {
+		h.logError("Couldn't fetch pins by category", w, http.StatusInternalServerError, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	h.jsonEnc.Encode(pins)
 }
