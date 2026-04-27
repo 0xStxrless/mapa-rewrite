@@ -20,10 +20,12 @@ type App struct {
 func NewRouter(h *App) http.Handler {
 	r := chi.NewRouter()
 
-	// r.Post("/login/auth") // implement this when you get just all of mock data lol
+	r.Post("/login", h.Login)
 
 	r.Group(func(r chi.Router) {
-		// r.Use(authMiddleware) // Apply auth middleware to all routes in this group
+		r.Use(h.AuthMiddleware)
+
+		r.Post("/auth/change-password", h.ChangePassword)
 
 		// pins
 		r.Get("/pins", h.GetPins)
