@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -9,63 +10,63 @@ import (
 )
 
 func (h *App) ListAppUpdates(w http.ResponseWriter, r *http.Request) {
-	updates, err := h.queries.ListAppUpdates(r.Context())
+	updates, err := h.Queries.ListAppUpdates(r.Context())
 	if err != nil {
-		h.logError("Couldn't fetch app updates", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't fetch app updates", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(updates)
+	json.NewEncoder(w).Encode(updates)
 }
 
 func (h *App) GetLatestAppUpdate(w http.ResponseWriter, r *http.Request) {
-	update, err := h.queries.GetLatestAppUpdate(r.Context())
+	update, err := h.Queries.GetLatestAppUpdate(r.Context())
 	if err != nil {
-		h.logError("Couldn't fetch latest app update", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't fetch latest app update", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(update)
+	json.NewEncoder(w).Encode(update)
 }
 
 func (h *App) GetUnviewedUpdates(w http.ResponseWriter, r *http.Request) {
 	userIDStr, err := h.sanitize(chi.URLParam(r, "user_id"), CHARLIMIT)
 	if err != nil {
-		h.logError("Invalid user ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid user ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	userID, err := strconv.Atoi(userIDStr)
 	if err != nil || userID < 0 {
-		h.logError("Invalid user ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid user ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	updates, err := h.queries.GetUnviewedUpdates(r.Context(), int32(userID))
+	updates, err := h.Queries.GetUnviewedUpdates(r.Context(), int32(userID))
 	if err != nil {
-		h.logError("Couldn't fetch unviewed updates", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't fetch un viewed updates", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(updates)
+	json.NewEncoder(w).Encode(updates)
 }
 
 func (h *App) MarkUpdateViewed(w http.ResponseWriter, r *http.Request) {
 	var params db.MarkUpdateViewedParams
-	if err := h.jsonDec.Decode(&params); err != nil {
-		h.logError("Invalid parameters", w, http.StatusBadRequest, err)
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		h.logError("Invalid parameters", w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	entry, err := h.queries.MarkUpdateViewed(r.Context(), params)
+	entry, err := h.Queries.MarkUpdateViewed(r.Context(), params)
 	if err != nil {
-		h.logError("Couldn't mark update as viewed", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't mark update as viewed", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(entry)
+	json.NewEncoder(w).Encode(entry)
 }

@@ -2,8 +2,7 @@
 package router
 
 import (
-	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/0xstxrless/punkt/backend/internal/db"
@@ -11,10 +10,8 @@ import (
 )
 
 type App struct {
-	queries *db.Queries
-	logger  log.Logger
-	jsonEnc json.Encoder
-	jsonDec json.Decoder
+	Queries *db.Queries
+	Logger  *slog.Logger
 }
 
 func NewRouter(h *App) http.Handler {
@@ -68,5 +65,5 @@ func NewRouter(h *App) http.Handler {
 		r.Post("/updates/viewed", h.MarkUpdateViewed)
 	})
 
-	return r
+	return h.requestLogger(r)
 }

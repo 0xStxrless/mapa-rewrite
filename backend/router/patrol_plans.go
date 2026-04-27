@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -10,71 +11,71 @@ import (
 
 func (h *App) CreatePatrolPlan(w http.ResponseWriter, r *http.Request) {
 	var params db.CreatePatrolPlanParams
-	if err := h.jsonDec.Decode(&params); err != nil {
-		h.logError("Invalid patrol plan parameters", w, http.StatusBadRequest, err)
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		h.logError("Invalid patrol plan parameters", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	var err error
 	params.Name, err = h.sanitize(params.Name, CHARLIMIT)
 	if err != nil {
-		h.logError("Invalid param name", w, http.StatusBadRequest, err)
+		h.logError("Invalid param name", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	params.Date, err = h.sanitize(params.Date, CHARLIMIT)
 	if err != nil {
-		h.logError("Invalid param date", w, http.StatusBadRequest, err)
+		h.logError("Invalid param date", w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	plan, err := h.queries.CreatePatrolPlan(r.Context(), params)
+	plan, err := h.Queries.CreatePatrolPlan(r.Context(), params)
 	if err != nil {
-		h.logError("Couldn't create patrol plan", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't create patrol plan", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(plan)
+	json.NewEncoder(w).Encode(plan)
 }
 
 func (h *App) GetPatrolPlan(w http.ResponseWriter, r *http.Request) {
 	planID, err := h.paramIDtoInt(r)
 	if err != nil {
-		h.logError("Invalid patrol plan ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid patrol plan ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	plan, err := h.queries.GetPatrolPlan(r.Context(), int32(planID))
+	plan, err := h.Queries.GetPatrolPlan(r.Context(), int32(planID))
 	if err != nil {
-		h.logError("Patrol plan not found", w, http.StatusNotFound, err)
+		h.logError("Patrol plan not found", w, r, http.StatusNotFound, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(plan)
+	json.NewEncoder(w).Encode(plan)
 }
 
 func (h *App) ListPatrolPlans(w http.ResponseWriter, r *http.Request) {
-	plans, err := h.queries.ListPatrolPlans(r.Context())
+	plans, err := h.Queries.ListPatrolPlans(r.Context())
 	if err != nil {
-		h.logError("Couldn't fetch patrol plans", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't fetch patrol plans", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(plans)
+	json.NewEncoder(w).Encode(plans)
 }
 
 func (h *App) DeletePatrolPlan(w http.ResponseWriter, r *http.Request) {
 	planID, err := h.paramIDtoInt(r)
 	if err != nil {
-		h.logError("Invalid patrol plan ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid patrol plan ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	if err := h.queries.DeletePatrolPlan(r.Context(), int32(planID)); err != nil {
-		h.logError("Couldn't delete patrol plan", w, http.StatusInternalServerError, err)
+	if err := h.Queries.DeletePatrolPlan(r.Context(), int32(planID)); err != nil {
+		h.logError("Couldn't delete patrol plan", w, r, http.StatusInternalServerError, err)
 		return
 	}
 }
@@ -82,60 +83,60 @@ func (h *App) DeletePatrolPlan(w http.ResponseWriter, r *http.Request) {
 func (h *App) GetPatrolPlanWithPins(w http.ResponseWriter, r *http.Request) {
 	planID, err := h.paramIDtoInt(r)
 	if err != nil {
-		h.logError("Invalid patrol plan ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid patrol plan ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	rows, err := h.queries.GetPatrolPlanWithPins(r.Context(), int32(planID))
+	rows, err := h.Queries.GetPatrolPlanWithPins(r.Context(), int32(planID))
 	if err != nil {
-		h.logError("Couldn't fetch patrol plan pins", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't fetch patrol plan pins", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(rows)
+	json.NewEncoder(w).Encode(rows)
 }
 
 func (h *App) AddPinToPatrolPlan(w http.ResponseWriter, r *http.Request) {
 	planID, err := h.paramIDtoInt(r)
 	if err != nil {
-		h.logError("Invalid patrol plan ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid patrol plan ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	var params db.AddPinToPatrolPlanParams
-	if err := h.jsonDec.Decode(&params); err != nil {
-		h.logError("Invalid parameters", w, http.StatusBadRequest, err)
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		h.logError("Invalid parameters", w, r, http.StatusBadRequest, err)
 		return
 	}
 	params.PatrolPlanID = int32(planID)
 
-	entry, err := h.queries.AddPinToPatrolPlan(r.Context(), params)
+	entry, err := h.Queries.AddPinToPatrolPlan(r.Context(), params)
 	if err != nil {
-		h.logError("Couldn't add pin to patrol plan", w, http.StatusInternalServerError, err)
+		h.logError("Couldn't add pin to patrol plan", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	h.jsonEnc.Encode(entry)
+	json.NewEncoder(w).Encode(entry)
 }
 
 func (h *App) RemovePinFromPatrolPlan(w http.ResponseWriter, r *http.Request) {
 	planID, err := h.paramIDtoInt(r)
 	if err != nil {
-		h.logError("Invalid patrol plan ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid patrol plan ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	pinIDStr, err := h.sanitize(chi.URLParam(r, "pin_id"), CHARLIMIT)
 	if err != nil {
-		h.logError("Invalid pin ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid pin ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	pinID, err := strconv.Atoi(pinIDStr)
 	if err != nil || pinID < 0 {
-		h.logError("Invalid pin ID", w, http.StatusBadRequest, err)
+		h.logError("Invalid pin ID", w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -144,8 +145,8 @@ func (h *App) RemovePinFromPatrolPlan(w http.ResponseWriter, r *http.Request) {
 		PinID:        int32(pinID),
 	}
 
-	if err := h.queries.RemovePinFromPatrolPlan(r.Context(), params); err != nil {
-		h.logError("Couldn't remove pin from patrol plan", w, http.StatusInternalServerError, err)
+	if err := h.Queries.RemovePinFromPatrolPlan(r.Context(), params); err != nil {
+		h.logError("Couldn't remove pin from patrol plan", w, r, http.StatusInternalServerError, err)
 		return
 	}
 }

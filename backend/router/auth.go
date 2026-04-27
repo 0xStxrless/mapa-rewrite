@@ -13,8 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type contextKey string
-
 const userContextKey contextKey = "user"
 
 type Claims struct {
@@ -41,31 +39,31 @@ type changePasswordRequest struct {
 func (h *App) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logError("Invalid request body", w, http.StatusBadRequest, err)
+		h.logError("Invalid request body", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Email == "" || req.Password == "" {
-		http.Error(w, "email and password are required", http.StatusBadRequest)
+		h.logError("email and password are required", w, r, http.StatusBadRequest, errors.New("missing fields"))
 		return
 	}
 
-	user, err := h.queries.GetUserByEmail(r.Context(), req.Email)
+	user, err := h.Queries.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Run a dummy scrypt verify so timing is indistinguishable
 			// from a real failed attempt — prevents user enumeration.
 			auth.VerifyPassword(req.Password, "scrypt:deadbeef:deadbeef")
-			http.Error(w, "invalid credentials", http.StatusUnauthorized)
+			h.logError("Invalid credentials", w, r, http.StatusUnauthorized, errors.New("invalid credentials"))
 			return
 		}
-		h.logError("DB error during login", w, http.StatusInternalServerError, err)
+		h.logError("DB error during login", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	if !auth.VerifyPassword(req.Password, user.PasswordHash) {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		h.logError("Invalid credentials", w, r, http.StatusUnauthorized, errors.New("invalid credentials"))
 		return
 	}
 
@@ -75,18 +73,18 @@ func (h *App) Login(w http.ResponseWriter, r *http.Request) {
 	isLegacy := !strings.HasPrefix(user.PasswordHash, "scrypt:")
 	if isLegacy {
 		if newHash, err := auth.HashPassword(req.Password); err == nil {
-			_ = h.queries.SetPasswordHash(r.Context(), db.SetPasswordHashParams{
+			_ = h.Queries.SetPasswordHash(r.Context(), db.SetPasswordHashParams{
 				ID:           user.ID,
 				PasswordHash: newHash,
 			})
 		}
 	}
 
-	_ = h.queries.UpdateLastLogin(r.Context(), user.ID)
+	_ = h.Queries.UpdateLastLogin(r.Context(), user.ID)
 
 	secret, err := auth.GetSessionSecret()
 	if err != nil {
-		h.logError("Session secret unavailable", w, http.StatusInternalServerError, err)
+		h.logError("Session secret unavailable", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -95,7 +93,7 @@ func (h *App) Login(w http.ResponseWriter, r *http.Request) {
 		Email:  user.Email,
 	}, secret)
 	if err != nil {
-		h.logError("Failed to sign session", w, http.StatusInternalServerError, err)
+		h.logError("Failed to sign session", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -109,43 +107,43 @@ func (h *App) Login(w http.ResponseWriter, r *http.Request) {
 func (h *App) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		h.logError("Unauthorized", w, r, http.StatusUnauthorized, errors.New("unauthorized"))
 		return
 	}
 
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logError("Invalid request body", w, http.StatusBadRequest, err)
+		h.logError("Invalid request body", w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	if len(req.NewPassword) < 8 {
-		http.Error(w, "new password must be at least 8 characters", http.StatusBadRequest)
+		h.logError("New password must be at least 8 characters", w, r, http.StatusBadRequest, errors.New("password too short"))
 		return
 	}
 
-	user, err := h.queries.GetUserByID(r.Context(), claims.UserID)
+	user, err := h.Queries.GetUserByID(r.Context(), claims.UserID)
 	if err != nil {
-		h.logError("User not found", w, http.StatusNotFound, err)
+		h.logError("User not found", w, r, http.StatusNotFound, err)
 		return
 	}
 
 	if !auth.VerifyPassword(req.CurrentPassword, user.PasswordHash) {
-		http.Error(w, "invalid current password", http.StatusUnauthorized)
+		h.logError("Invalid current password", w, r, http.StatusUnauthorized, errors.New("invalid current password"))
 		return
 	}
 
 	newHash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
-		h.logError("Failed to hash password", w, http.StatusInternalServerError, err)
+		h.logError("Failed to hash password", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	if err := h.queries.SetPasswordHash(r.Context(), db.SetPasswordHashParams{
+	if err := h.Queries.SetPasswordHash(r.Context(), db.SetPasswordHashParams{
 		ID:           claims.UserID,
 		PasswordHash: newHash,
 	}); err != nil {
-		h.logError("Failed to update password", w, http.StatusInternalServerError, err)
+		h.logError("Failed to update password", w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -157,7 +155,7 @@ func (h *App) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		if !strings.HasPrefix(header, "Bearer ") {
-			http.Error(w, "missing or malformed token", http.StatusUnauthorized)
+			h.logError("Missing or malformed token", w, r, http.StatusUnauthorized, errors.New("missing or malformed token"))
 			return
 		}
 
@@ -165,13 +163,13 @@ func (h *App) AuthMiddleware(next http.Handler) http.Handler {
 
 		secret, err := auth.GetSessionSecret()
 		if err != nil {
-			http.Error(w, "server misconfiguration", http.StatusInternalServerError)
+			h.logError("Session secret unavailable", w, r, http.StatusInternalServerError, err)
 			return
 		}
 
 		payload, err := auth.VerifyAndParseSession(tokenStr, secret)
 		if err != nil {
-			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+			h.logError("Invalid or expired token", w, r, http.StatusUnauthorized, errors.New("invalid or expired token"))
 			return
 		}
 
