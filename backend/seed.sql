@@ -56,5 +56,5 @@ INSERT INTO app_updates (version, title, description, features, released_at) VAL
 -- Your Go auth will auto-migrate to scrypt on first login
 INSERT INTO users (email, password_hash, must_change_password) VALUES
   ('anna@example.com',  '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86', true),
-  ('marek@example.com', '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86', true),
-  ('admin@example.com', '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86', false);
+  ('d.zablocki@mopsgdynia.pl', '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86', true),
+  ('admin@admin.com', '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86', false);

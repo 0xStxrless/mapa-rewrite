@@ -47,11 +47,13 @@ func (h *App) GetVisitsByPin(w http.ResponseWriter, r *http.Request) {
 	pin, err := h.paramIDtoInt(r)
 	if err != nil {
 		h.logError("Invalid Pin ID", w, r, http.StatusBadRequest, err)
+		return
 	}
 
 	params, err := h.Queries.GetVisitsByPin(r.Context(), int32(pin))
 	if err != nil {
 		h.logError("Couldn't get visits", w, r, http.StatusBadRequest, err)
+		return
 	}
 
 	json.NewEncoder(w).Encode(&params)

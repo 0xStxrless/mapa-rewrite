@@ -109,6 +109,9 @@ func (h *App) requestLogger(next http.Handler) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(w, r.WithContext(ctx))
 		log.Info("request completed", "duration_ms", time.Since(start).Milliseconds())
+		// add some spacing in logs for better readability
+		println()
+		println()
 	})
 }
 

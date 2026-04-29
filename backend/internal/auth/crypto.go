@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/scrypt"
 )
@@ -24,8 +25,9 @@ const (
 )
 
 type SessionPayload struct {
-	UserID int32  `json:"userId"`
-	Email  string `json:"email"`
+	UserID    int32  `json:"userId"`
+	Email     string `json:"email"`
+	ExpiresAt int64  `json:"expiresAt"`
 }
 
 func GetSessionSecret() (string, error) {
@@ -95,6 +97,9 @@ func VerifyPassword(password, stored string) bool {
 
 // SignSession produces: base64url(json).hmac-sha256
 func SignSession(payload SessionPayload, secret string) (string, error) {
+	if payload.ExpiresAt == 0 {
+		payload.ExpiresAt = time.Now().Add(7 * 24 * time.Hour).Unix()
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("marshalling payload: %w", err)
@@ -138,6 +143,10 @@ func VerifyAndParseSession(cookie, secret string) (*SessionPayload, error) {
 	var p SessionPayload
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, fmt.Errorf("json decode: %w", err)
+	}
+
+	if p.ExpiresAt != 0 && time.Now().Unix() > p.ExpiresAt {
+		return nil, errors.New("token expired")
 	}
 
 	return &p, nil
