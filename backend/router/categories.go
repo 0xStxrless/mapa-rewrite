@@ -9,7 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const CHARLIMIT = 64
+// CHARLIMIT is the maximum length for string parameters to prevent abuse and potential DoS attacks.
+const CHARLIMIT = 128
 
 func (h *App) ListCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.Queries.ListCategories(r.Context())
@@ -23,8 +24,11 @@ func (h *App) ListCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *App) CreateCategory(w http.ResponseWriter, r *http.Request) {
-	var params db.CreateCategoryParams
-	var err error
+	var (
+		params db.CreateCategoryParams
+		err    error
+	)
+
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		h.logError("Invalid Category Parameters", w, r, http.StatusBadRequest, err)
 		return
@@ -64,11 +68,47 @@ func (h *App) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Queries.DeleteCategory(r.Context(), category)
+	err = h.Queries.DeleteCategory(r.Context(), category)
+	if err != nil {
+		h.logError("Couldn't delete category", w, r, http.StatusBadRequest, err)
+		return
+	}
+
 }
 
 func (h *App) UpdateCategory(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement it
+	var (
+		params db.UpdateCategoryParams
+		err    error
+	)
+
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		h.logError("Invalid Category Parameters", w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	params.Name, err = h.sanitize(params.Name, CHARLIMIT)
+	if err != nil {
+		h.logError("Invalid param name", w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if !IsValidHex(params.Color) {
+		h.logError("Invalid HEX color", w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	cat, err := h.Queries.UpdateCategory(r.Context(), db.UpdateCategoryParams{
+		Name:  params.Name,
+		Color: params.Color,
+	})
+	if err != nil {
+		h.logError("Couldn't update category", w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cat)
 }
 
 func IsValidHex(color string) bool {

@@ -144,3 +144,18 @@ DELETE FROM pins WHERE id = $1;
 
 -- name: IncrementPinVisits :exec
 UPDATE pins SET visits_count = COALESCE(visits_count, 0) + 1 WHERE id = $1;
+
+-- name: UpdateVisit :one
+UPDATE visits
+SET name = $2,
+    note = $3,
+    image_url = $4,
+    pin_id = $5
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateCategory :one
+UPDATE categories 
+SET color = $2 
+WHERE name = $1 
+RETURNING *;

@@ -33,8 +33,8 @@ func (h *App) paramIDtoInt(r *http.Request) (int, error) {
 		return 0, err
 	}
 
-	if pinID < 0 {
-		return 0, err
+	if pinID <= 0 {
+		return 0, errors.New("ID must be greater than 0")
 	}
 	return pinID, nil
 }
@@ -92,6 +92,8 @@ func NewLogger() *slog.Logger {
 }
 func (h *App) requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// add sum spacing for separation in logs
+		println()
 		requestID := r.Header.Get("X-Request-Id")
 		if requestID == "" {
 			requestID = uuid.NewString()
@@ -109,8 +111,8 @@ func (h *App) requestLogger(next http.Handler) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(w, r.WithContext(ctx))
 		log.Info("request completed", "duration_ms", time.Since(start).Milliseconds())
+
 		// add some spacing in logs for better readability
-		println()
 		println()
 	})
 }

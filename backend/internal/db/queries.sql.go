@@ -731,6 +731,25 @@ func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams
 	return err
 }
 
+const updateCategory = `-- name: UpdateCategory :one
+UPDATE categories 
+SET color = $2 
+WHERE name = $1 
+RETURNING name, color
+`
+
+type UpdateCategoryParams struct {
+	Name  string `db:"name" json:"name"`
+	Color string `db:"color" json:"color"`
+}
+
+func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error) {
+	row := q.db.QueryRow(ctx, updateCategory, arg.Name, arg.Color)
+	var i Category
+	err := row.Scan(&i.Name, &i.Color)
+	return i, err
+}
+
 const updateLastLogin = `-- name: UpdateLastLogin :exec
 UPDATE users SET last_login = now() WHERE id = $1
 `
@@ -781,6 +800,44 @@ func (q *Queries) UpdatePin(ctx context.Context, arg UpdatePinParams) (Pin, erro
 		&i.UpdatedAt,
 		&i.Version,
 		&i.VisitsCount,
+	)
+	return i, err
+}
+
+const updateVisit = `-- name: UpdateVisit :one
+UPDATE visits
+SET name = $2,
+    note = $3,
+    image_url = $4,
+    pin_id = $5
+WHERE id = $1
+RETURNING id, pin_id, name, note, image_url, visited_at
+`
+
+type UpdateVisitParams struct {
+	ID       int32       `db:"id" json:"id"`
+	Name     string      `db:"name" json:"name"`
+	Note     pgtype.Text `db:"note" json:"note"`
+	ImageUrl pgtype.Text `db:"image_url" json:"image_url"`
+	PinID    int32       `db:"pin_id" json:"pin_id"`
+}
+
+func (q *Queries) UpdateVisit(ctx context.Context, arg UpdateVisitParams) (Visit, error) {
+	row := q.db.QueryRow(ctx, updateVisit,
+		arg.ID,
+		arg.Name,
+		arg.Note,
+		arg.ImageUrl,
+		arg.PinID,
+	)
+	var i Visit
+	err := row.Scan(
+		&i.ID,
+		&i.PinID,
+		&i.Name,
+		&i.Note,
+		&i.ImageUrl,
+		&i.VisitedAt,
 	)
 	return i, err
 }
