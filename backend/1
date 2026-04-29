@@ -1,0 +1,11 @@
+# this is all for localhost development in prod those variables will be different
+DATABASE_URL=postgres://myuser:mypassword@localhost:5432/mydb
+APP_ENV=production
+SESSION_SECRET=
+JWT_SECRET=some-long-random-string-here
+PORT=5060
+
+# this is just for me to remember lol
+# db_user="myuser"
+# db_pass="mypassword"
+# db_name="mydb"
