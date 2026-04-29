@@ -1,0 +1,11 @@
+# drop and recreate clean db
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS mydb;"
+sudo -u postgres psql -c "CREATE DATABASE mydb OWNER myuser;"
+
+# apply
+psql postgres://myuser:mypassword@localhost:5432/mydb -f schema.sql
+psql postgres://myuser:mypassword@localhost:5432/mydb -f seed.sql
+
+# verify
+psql postgres://myuser:mypassword@localhost:5432/mydb -c "\dt"
+psql postgres://myuser:mypassword@localhost:5432/mydb -c "SELECT * FROM pins;"
