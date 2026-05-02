@@ -22,6 +22,33 @@ func (h *App) UpsertStreetworkStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// they can be 0 but not negative
+	if params.Interactions < 0 || params.Interventions < 0 || params.NewContacts < 0 {
+		h.logError("Interactions, interventions and new_contacts must be greater than 0", w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	if params.Month == "" {
+		h.logError("Month is required", w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	if !validMonth(params.Month) {
+		h.logError("Expected month format is YYYY-MM", w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	if params.WorkerName == "" {
+		h.logError("Worker name is required", w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	params.WorkerName, err = h.sanitize(params.WorkerName, CHARLIMIT)
+	if err != nil {
+		h.logError("Invalid param worker_name", w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	params.Month, err = h.sanitize(params.Month, CHARLIMIT)
 	if err != nil {
 		h.logError("Invalid param month", w, r, http.StatusBadRequest, err)
@@ -63,6 +90,17 @@ func (h *App) GetStatsByWorker(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats, err := h.Queries.GetStatsByWorker(r.Context(), worker)
+	if err != nil {
+		h.logError("Couldn't fetch stats", w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
+
+func (h *App) GetAllStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.Queries.GetAllStats(r.Context())
 	if err != nil {
 		h.logError("Couldn't fetch stats", w, r, http.StatusInternalServerError, err)
 		return

@@ -210,6 +210,56 @@ func (q *Queries) DeleteVisit(ctx context.Context, id int32) error {
 	return err
 }
 
+const getAllStats = `-- name: GetAllStats :many
+
+SELECT id, worker_name, month, interactions, new_contacts, interventions, created_at, updated_at, avatar, bg_color FROM streetwork_stats ORDER BY month DESC, worker_name
+`
+
+// queries/streetwork_stats.sql
+func (q *Queries) GetAllStats(ctx context.Context) ([]StreetworkStat, error) {
+	rows, err := q.db.Query(ctx, getAllStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StreetworkStat
+	for rows.Next() {
+		var i StreetworkStat
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkerName,
+			&i.Month,
+			&i.Interactions,
+			&i.NewContacts,
+			&i.Interventions,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Avatar,
+			&i.BgColor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCategory = `-- name: GetCategory :one
+
+SELECT name, color FROM categories WHERE name = $1
+`
+
+// queries/categories.sql
+func (q *Queries) GetCategory(ctx context.Context, name string) (Category, error) {
+	row := q.db.QueryRow(ctx, getCategory, name)
+	var i Category
+	err := row.Scan(&i.Name, &i.Color)
+	return i, err
+}
+
 const getLatestAppUpdate = `-- name: GetLatestAppUpdate :one
 SELECT id, version, title, description, features, released_at FROM app_updates ORDER BY released_at DESC LIMIT 1
 `
@@ -226,6 +276,52 @@ func (q *Queries) GetLatestAppUpdate(ctx context.Context) (AppUpdate, error) {
 		&i.ReleasedAt,
 	)
 	return i, err
+}
+
+const getMonthlyTotals = `-- name: GetMonthlyTotals :many
+SELECT
+  month,
+  SUM(interactions) AS total_interactions,
+  SUM(new_contacts) AS total_new_contacts,
+  SUM(interventions) AS total_interventions,
+  COUNT(DISTINCT worker_name) AS active_workers
+FROM streetwork_stats
+GROUP BY month
+ORDER BY month DESC
+`
+
+type GetMonthlyTotalsRow struct {
+	Month              string `db:"month" json:"month"`
+	TotalInteractions  int64  `db:"total_interactions" json:"total_interactions"`
+	TotalNewContacts   int64  `db:"total_new_contacts" json:"total_new_contacts"`
+	TotalInterventions int64  `db:"total_interventions" json:"total_interventions"`
+	ActiveWorkers      int64  `db:"active_workers" json:"active_workers"`
+}
+
+func (q *Queries) GetMonthlyTotals(ctx context.Context) ([]GetMonthlyTotalsRow, error) {
+	rows, err := q.db.Query(ctx, getMonthlyTotals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMonthlyTotalsRow
+	for rows.Next() {
+		var i GetMonthlyTotalsRow
+		if err := rows.Scan(
+			&i.Month,
+			&i.TotalInteractions,
+			&i.TotalNewContacts,
+			&i.TotalInterventions,
+			&i.ActiveWorkers,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getPatrolPlan = `-- name: GetPatrolPlan :one
@@ -305,10 +401,49 @@ func (q *Queries) GetPatrolPlanWithPins(ctx context.Context, patrolPlanID int32)
 	return items, nil
 }
 
+const getPatrolPlansByDateRange = `-- name: GetPatrolPlansByDateRange :many
+SELECT id, name, date, created_at, updated_at FROM patrol_plans
+WHERE date BETWEEN $1 AND $2
+ORDER BY date DESC
+`
+
+type GetPatrolPlansByDateRangeParams struct {
+	Date   string `db:"date" json:"date"`
+	Date_2 string `db:"date_2" json:"date_2"`
+}
+
+func (q *Queries) GetPatrolPlansByDateRange(ctx context.Context, arg GetPatrolPlansByDateRangeParams) ([]PatrolPlan, error) {
+	rows, err := q.db.Query(ctx, getPatrolPlansByDateRange, arg.Date, arg.Date_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PatrolPlan
+	for rows.Next() {
+		var i PatrolPlan
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Date,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPin = `-- name: GetPin :one
+
 SELECT id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count FROM pins WHERE id = $1
 `
 
+// queries/pins.sql
 func (q *Queries) GetPin(ctx context.Context, id int32) (Pin, error) {
 	row := q.db.QueryRow(ctx, getPin, id)
 	var i Pin
@@ -326,6 +461,231 @@ func (q *Queries) GetPin(ctx context.Context, id int32) (Pin, error) {
 		&i.VisitsCount,
 	)
 	return i, err
+}
+
+const getPinWithVisits = `-- name: GetPinWithVisits :many
+SELECT
+  p.id, p.title, p.description, p.lat, p.lng, p.category, p.image_url, p.created_at, p.updated_at, p.version, p.visits_count,
+  v.id AS visit_id,
+  v.name AS visitor_name,
+  v.note,
+  v.image_url AS visit_image_url,
+  v.visited_at
+FROM pins p
+LEFT JOIN visits v ON v.pin_id = p.id
+WHERE p.id = $1
+ORDER BY v.visited_at DESC
+`
+
+type GetPinWithVisitsRow struct {
+	ID            int32              `db:"id" json:"id"`
+	Title         string             `db:"title" json:"title"`
+	Description   pgtype.Text        `db:"description" json:"description"`
+	Lat           float64            `db:"lat" json:"lat"`
+	Lng           float64            `db:"lng" json:"lng"`
+	Category      string             `db:"category" json:"category"`
+	ImageUrl      pgtype.Text        `db:"image_url" json:"image_url"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Version       int32              `db:"version" json:"version"`
+	VisitsCount   pgtype.Int4        `db:"visits_count" json:"visits_count"`
+	VisitID       pgtype.Int4        `db:"visit_id" json:"visit_id"`
+	VisitorName   pgtype.Text        `db:"visitor_name" json:"visitor_name"`
+	Note          pgtype.Text        `db:"note" json:"note"`
+	VisitImageUrl pgtype.Text        `db:"visit_image_url" json:"visit_image_url"`
+	VisitedAt     pgtype.Timestamptz `db:"visited_at" json:"visited_at"`
+}
+
+func (q *Queries) GetPinWithVisits(ctx context.Context, id int32) ([]GetPinWithVisitsRow, error) {
+	rows, err := q.db.Query(ctx, getPinWithVisits, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPinWithVisitsRow
+	for rows.Next() {
+		var i GetPinWithVisitsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+			&i.VisitID,
+			&i.VisitorName,
+			&i.Note,
+			&i.VisitImageUrl,
+			&i.VisitedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPinsNearLocation = `-- name: GetPinsNearLocation :many
+SELECT id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count,
+  round(cast(point(lng, lat) <-> point($1, $2) as numeric), 6) AS distance
+FROM pins
+ORDER BY point(lng, lat) <-> point($1, $2)
+LIMIT $3
+`
+
+type GetPinsNearLocationParams struct {
+	Point   float64 `db:"point" json:"point"`
+	Point_2 float64 `db:"point_2" json:"point_2"`
+	Limit   int32   `db:"limit" json:"limit"`
+}
+
+type GetPinsNearLocationRow struct {
+	ID          int32              `db:"id" json:"id"`
+	Title       string             `db:"title" json:"title"`
+	Description pgtype.Text        `db:"description" json:"description"`
+	Lat         float64            `db:"lat" json:"lat"`
+	Lng         float64            `db:"lng" json:"lng"`
+	Category    string             `db:"category" json:"category"`
+	ImageUrl    pgtype.Text        `db:"image_url" json:"image_url"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Version     int32              `db:"version" json:"version"`
+	VisitsCount pgtype.Int4        `db:"visits_count" json:"visits_count"`
+	Distance    pgtype.Numeric     `db:"distance" json:"distance"`
+}
+
+func (q *Queries) GetPinsNearLocation(ctx context.Context, arg GetPinsNearLocationParams) ([]GetPinsNearLocationRow, error) {
+	rows, err := q.db.Query(ctx, getPinsNearLocation, arg.Point, arg.Point_2, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPinsNearLocationRow
+	for rows.Next() {
+		var i GetPinsNearLocationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+			&i.Distance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRecentVisits = `-- name: GetRecentVisits :many
+SELECT
+  v.id, v.pin_id, v.name, v.note, v.image_url, v.visited_at,
+  p.title AS pin_title,
+  p.category AS pin_category
+FROM visits v
+JOIN pins p ON p.id = v.pin_id
+ORDER BY v.visited_at DESC
+LIMIT $1
+`
+
+type GetRecentVisitsRow struct {
+	ID          int32              `db:"id" json:"id"`
+	PinID       int32              `db:"pin_id" json:"pin_id"`
+	Name        string             `db:"name" json:"name"`
+	Note        pgtype.Text        `db:"note" json:"note"`
+	ImageUrl    pgtype.Text        `db:"image_url" json:"image_url"`
+	VisitedAt   pgtype.Timestamptz `db:"visited_at" json:"visited_at"`
+	PinTitle    string             `db:"pin_title" json:"pin_title"`
+	PinCategory string             `db:"pin_category" json:"pin_category"`
+}
+
+func (q *Queries) GetRecentVisits(ctx context.Context, limit int32) ([]GetRecentVisitsRow, error) {
+	rows, err := q.db.Query(ctx, getRecentVisits, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentVisitsRow
+	for rows.Next() {
+		var i GetRecentVisitsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PinID,
+			&i.Name,
+			&i.Note,
+			&i.ImageUrl,
+			&i.VisitedAt,
+			&i.PinTitle,
+			&i.PinCategory,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStatsByDateRange = `-- name: GetStatsByDateRange :many
+SELECT id, worker_name, month, interactions, new_contacts, interventions, created_at, updated_at, avatar, bg_color FROM streetwork_stats
+WHERE month BETWEEN $1 AND $2
+ORDER BY month DESC, worker_name
+`
+
+type GetStatsByDateRangeParams struct {
+	Month   string `db:"month" json:"month"`
+	Month_2 string `db:"month_2" json:"month_2"`
+}
+
+func (q *Queries) GetStatsByDateRange(ctx context.Context, arg GetStatsByDateRangeParams) ([]StreetworkStat, error) {
+	rows, err := q.db.Query(ctx, getStatsByDateRange, arg.Month, arg.Month_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StreetworkStat
+	for rows.Next() {
+		var i StreetworkStat
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkerName,
+			&i.Month,
+			&i.Interactions,
+			&i.NewContacts,
+			&i.Interventions,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Avatar,
+			&i.BgColor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getStatsByMonth = `-- name: GetStatsByMonth :many
@@ -364,11 +724,9 @@ func (q *Queries) GetStatsByMonth(ctx context.Context, month string) ([]Streetwo
 }
 
 const getStatsByWorker = `-- name: GetStatsByWorker :many
-
 SELECT id, worker_name, month, interactions, new_contacts, interventions, created_at, updated_at, avatar, bg_color FROM streetwork_stats WHERE worker_name = $1 ORDER BY month DESC
 `
 
-// queries/streetwork_stats.sql
 func (q *Queries) GetStatsByWorker(ctx context.Context, workerName string) ([]StreetworkStat, error) {
 	rows, err := q.db.Query(ctx, getStatsByWorker, workerName)
 	if err != nil {
@@ -389,6 +747,103 @@ func (q *Queries) GetStatsByWorker(ctx context.Context, workerName string) ([]St
 			&i.UpdatedAt,
 			&i.Avatar,
 			&i.BgColor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStatsSummary = `-- name: GetStatsSummary :many
+SELECT
+  worker_name,
+  COUNT(*) AS months_recorded,
+  SUM(interactions) AS total_interactions,
+  SUM(new_contacts) AS total_new_contacts,
+  SUM(interventions) AS total_interventions,
+  AVG(interactions) AS avg_interactions_per_month,
+  MIN(month) AS first_recorded,
+  MAX(month) AS last_recorded
+FROM streetwork_stats
+GROUP BY worker_name
+ORDER BY total_interactions DESC
+`
+
+type GetStatsSummaryRow struct {
+	WorkerName              string      `db:"worker_name" json:"worker_name"`
+	MonthsRecorded          int64       `db:"months_recorded" json:"months_recorded"`
+	TotalInteractions       int64       `db:"total_interactions" json:"total_interactions"`
+	TotalNewContacts        int64       `db:"total_new_contacts" json:"total_new_contacts"`
+	TotalInterventions      int64       `db:"total_interventions" json:"total_interventions"`
+	AvgInteractionsPerMonth float64     `db:"avg_interactions_per_month" json:"avg_interactions_per_month"`
+	FirstRecorded           interface{} `db:"first_recorded" json:"first_recorded"`
+	LastRecorded            interface{} `db:"last_recorded" json:"last_recorded"`
+}
+
+func (q *Queries) GetStatsSummary(ctx context.Context) ([]GetStatsSummaryRow, error) {
+	rows, err := q.db.Query(ctx, getStatsSummary)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetStatsSummaryRow
+	for rows.Next() {
+		var i GetStatsSummaryRow
+		if err := rows.Scan(
+			&i.WorkerName,
+			&i.MonthsRecorded,
+			&i.TotalInteractions,
+			&i.TotalNewContacts,
+			&i.TotalInterventions,
+			&i.AvgInteractionsPerMonth,
+			&i.FirstRecorded,
+			&i.LastRecorded,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTopWorkersByMonth = `-- name: GetTopWorkersByMonth :many
+SELECT
+  month,
+  worker_name,
+  interactions,
+  RANK() OVER (PARTITION BY month ORDER BY interactions DESC) AS rank
+FROM streetwork_stats
+ORDER BY month DESC, rank
+`
+
+type GetTopWorkersByMonthRow struct {
+	Month        string `db:"month" json:"month"`
+	WorkerName   string `db:"worker_name" json:"worker_name"`
+	Interactions int32  `db:"interactions" json:"interactions"`
+	Rank         int64  `db:"rank" json:"rank"`
+}
+
+func (q *Queries) GetTopWorkersByMonth(ctx context.Context) ([]GetTopWorkersByMonthRow, error) {
+	rows, err := q.db.Query(ctx, getTopWorkersByMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopWorkersByMonthRow
+	for rows.Next() {
+		var i GetTopWorkersByMonthRow
+		if err := rows.Scan(
+			&i.Month,
+			&i.WorkerName,
+			&i.Interactions,
+			&i.Rank,
 		); err != nil {
 			return nil, err
 		}
@@ -474,12 +929,86 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 	return i, err
 }
 
-const getVisitsByPin = `-- name: GetVisitsByPin :many
+const getVisitByID = `-- name: GetVisitByID :one
 
-SELECT id, pin_id, name, note, image_url, visited_at FROM visits WHERE pin_id = $1 ORDER BY visited_at DESC
+SELECT id, pin_id, name, note, image_url, visited_at FROM visits WHERE id = $1
 `
 
 // queries/visits.sql
+func (q *Queries) GetVisitByID(ctx context.Context, id int32) (Visit, error) {
+	row := q.db.QueryRow(ctx, getVisitByID, id)
+	var i Visit
+	err := row.Scan(
+		&i.ID,
+		&i.PinID,
+		&i.Name,
+		&i.Note,
+		&i.ImageUrl,
+		&i.VisitedAt,
+	)
+	return i, err
+}
+
+const getVisitsByDateRange = `-- name: GetVisitsByDateRange :many
+SELECT
+  v.id, v.pin_id, v.name, v.note, v.image_url, v.visited_at,
+  p.title AS pin_title,
+  p.category AS pin_category
+FROM visits v
+JOIN pins p ON p.id = v.pin_id
+WHERE v.visited_at BETWEEN $1 AND $2
+ORDER BY v.visited_at DESC
+`
+
+type GetVisitsByDateRangeParams struct {
+	VisitedAt   pgtype.Timestamptz `db:"visited_at" json:"visited_at"`
+	VisitedAt_2 pgtype.Timestamptz `db:"visited_at_2" json:"visited_at_2"`
+}
+
+type GetVisitsByDateRangeRow struct {
+	ID          int32              `db:"id" json:"id"`
+	PinID       int32              `db:"pin_id" json:"pin_id"`
+	Name        string             `db:"name" json:"name"`
+	Note        pgtype.Text        `db:"note" json:"note"`
+	ImageUrl    pgtype.Text        `db:"image_url" json:"image_url"`
+	VisitedAt   pgtype.Timestamptz `db:"visited_at" json:"visited_at"`
+	PinTitle    string             `db:"pin_title" json:"pin_title"`
+	PinCategory string             `db:"pin_category" json:"pin_category"`
+}
+
+func (q *Queries) GetVisitsByDateRange(ctx context.Context, arg GetVisitsByDateRangeParams) ([]GetVisitsByDateRangeRow, error) {
+	rows, err := q.db.Query(ctx, getVisitsByDateRange, arg.VisitedAt, arg.VisitedAt_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetVisitsByDateRangeRow
+	for rows.Next() {
+		var i GetVisitsByDateRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PinID,
+			&i.Name,
+			&i.Note,
+			&i.ImageUrl,
+			&i.VisitedAt,
+			&i.PinTitle,
+			&i.PinCategory,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getVisitsByPin = `-- name: GetVisitsByPin :many
+SELECT id, pin_id, name, note, image_url, visited_at FROM visits WHERE pin_id = $1 ORDER BY visited_at DESC
+`
+
 func (q *Queries) GetVisitsByPin(ctx context.Context, pinID int32) ([]Visit, error) {
 	rows, err := q.db.Query(ctx, getVisitsByPin, pinID)
 	if err != nil {
@@ -550,11 +1079,9 @@ func (q *Queries) ListAppUpdates(ctx context.Context) ([]AppUpdate, error) {
 }
 
 const listCategories = `-- name: ListCategories :many
-
 SELECT name, color FROM categories ORDER BY name
 `
 
-// queries/categories.sql
 func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 	rows, err := q.db.Query(ctx, listCategories)
 	if err != nil {
@@ -565,6 +1092,42 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 	for rows.Next() {
 		var i Category
 		if err := rows.Scan(&i.Name, &i.Color); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCategoriesWithPinCount = `-- name: ListCategoriesWithPinCount :many
+SELECT
+  c.name, c.color,
+  COUNT(p.id) AS pin_count
+FROM categories c
+LEFT JOIN pins p ON p.category = c.name
+GROUP BY c.name
+ORDER BY pin_count DESC
+`
+
+type ListCategoriesWithPinCountRow struct {
+	Name     string `db:"name" json:"name"`
+	Color    string `db:"color" json:"color"`
+	PinCount int64  `db:"pin_count" json:"pin_count"`
+}
+
+func (q *Queries) ListCategoriesWithPinCount(ctx context.Context) ([]ListCategoriesWithPinCountRow, error) {
+	rows, err := q.db.Query(ctx, listCategoriesWithPinCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCategoriesWithPinCountRow
+	for rows.Next() {
+		var i ListCategoriesWithPinCountRow
+		if err := rows.Scan(&i.Name, &i.Color, &i.PinCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -594,6 +1157,82 @@ func (q *Queries) ListPatrolPlans(ctx context.Context) ([]PatrolPlan, error) {
 			&i.Date,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPatrolPlansByDate = `-- name: ListPatrolPlansByDate :many
+SELECT id, name, date, created_at, updated_at FROM patrol_plans WHERE date = $1 ORDER BY created_at DESC
+`
+
+func (q *Queries) ListPatrolPlansByDate(ctx context.Context, date string) ([]PatrolPlan, error) {
+	rows, err := q.db.Query(ctx, listPatrolPlansByDate, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PatrolPlan
+	for rows.Next() {
+		var i PatrolPlan
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Date,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPatrolPlansWithPinCount = `-- name: ListPatrolPlansWithPinCount :many
+SELECT
+  pp.id, pp.name, pp.date, pp.created_at, pp.updated_at,
+  COUNT(ppp.pin_id) AS pin_count
+FROM patrol_plans pp
+LEFT JOIN patrol_plan_pins ppp ON ppp.patrol_plan_id = pp.id
+GROUP BY pp.id
+ORDER BY pp.created_at DESC
+`
+
+type ListPatrolPlansWithPinCountRow struct {
+	ID        int32              `db:"id" json:"id"`
+	Name      string             `db:"name" json:"name"`
+	Date      string             `db:"date" json:"date"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	PinCount  int64              `db:"pin_count" json:"pin_count"`
+}
+
+func (q *Queries) ListPatrolPlansWithPinCount(ctx context.Context) ([]ListPatrolPlansWithPinCountRow, error) {
+	rows, err := q.db.Query(ctx, listPatrolPlansWithPinCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPatrolPlansWithPinCountRow
+	for rows.Next() {
+		var i ListPatrolPlansWithPinCountRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Date,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PinCount,
 		); err != nil {
 			return nil, err
 		}
@@ -677,6 +1316,194 @@ func (q *Queries) ListPinsByCategory(ctx context.Context, category string) ([]Pi
 	return items, nil
 }
 
+const listPinsByCategoryWithVisitCount = `-- name: ListPinsByCategoryWithVisitCount :many
+SELECT
+  p.id, p.title, p.description, p.lat, p.lng, p.category, p.image_url, p.created_at, p.updated_at, p.version, p.visits_count,
+  COUNT(v.id) AS visit_count,
+  MAX(v.visited_at) AS last_visited_at
+FROM pins p
+LEFT JOIN visits v ON v.pin_id = p.id
+WHERE p.category = $1
+GROUP BY p.id
+ORDER BY p.created_at DESC
+`
+
+type ListPinsByCategoryWithVisitCountRow struct {
+	ID            int32              `db:"id" json:"id"`
+	Title         string             `db:"title" json:"title"`
+	Description   pgtype.Text        `db:"description" json:"description"`
+	Lat           float64            `db:"lat" json:"lat"`
+	Lng           float64            `db:"lng" json:"lng"`
+	Category      string             `db:"category" json:"category"`
+	ImageUrl      pgtype.Text        `db:"image_url" json:"image_url"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Version       int32              `db:"version" json:"version"`
+	VisitsCount   pgtype.Int4        `db:"visits_count" json:"visits_count"`
+	VisitCount    int64              `db:"visit_count" json:"visit_count"`
+	LastVisitedAt interface{}        `db:"last_visited_at" json:"last_visited_at"`
+}
+
+func (q *Queries) ListPinsByCategoryWithVisitCount(ctx context.Context, category string) ([]ListPinsByCategoryWithVisitCountRow, error) {
+	rows, err := q.db.Query(ctx, listPinsByCategoryWithVisitCount, category)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPinsByCategoryWithVisitCountRow
+	for rows.Next() {
+		var i ListPinsByCategoryWithVisitCountRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+			&i.VisitCount,
+			&i.LastVisitedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPinsWithLastVisit = `-- name: ListPinsWithLastVisit :many
+SELECT
+  p.id, p.title, p.description, p.lat, p.lng, p.category, p.image_url, p.created_at, p.updated_at, p.version, p.visits_count,
+  v.name AS last_visitor,
+  v.visited_at AS last_visited_at,
+  v.note AS last_note
+FROM pins p
+LEFT JOIN LATERAL (
+  SELECT id, pin_id, name, note, image_url, visited_at FROM visits WHERE pin_id = p.id ORDER BY visited_at DESC LIMIT 1
+) v ON true
+ORDER BY p.created_at DESC
+`
+
+type ListPinsWithLastVisitRow struct {
+	ID            int32              `db:"id" json:"id"`
+	Title         string             `db:"title" json:"title"`
+	Description   pgtype.Text        `db:"description" json:"description"`
+	Lat           float64            `db:"lat" json:"lat"`
+	Lng           float64            `db:"lng" json:"lng"`
+	Category      string             `db:"category" json:"category"`
+	ImageUrl      pgtype.Text        `db:"image_url" json:"image_url"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Version       int32              `db:"version" json:"version"`
+	VisitsCount   pgtype.Int4        `db:"visits_count" json:"visits_count"`
+	LastVisitor   string             `db:"last_visitor" json:"last_visitor"`
+	LastVisitedAt pgtype.Timestamptz `db:"last_visited_at" json:"last_visited_at"`
+	LastNote      pgtype.Text        `db:"last_note" json:"last_note"`
+}
+
+func (q *Queries) ListPinsWithLastVisit(ctx context.Context) ([]ListPinsWithLastVisitRow, error) {
+	rows, err := q.db.Query(ctx, listPinsWithLastVisit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPinsWithLastVisitRow
+	for rows.Next() {
+		var i ListPinsWithLastVisitRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+			&i.LastVisitor,
+			&i.LastVisitedAt,
+			&i.LastNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPinsWithVisitCount = `-- name: ListPinsWithVisitCount :many
+SELECT
+  p.id, p.title, p.description, p.lat, p.lng, p.category, p.image_url, p.created_at, p.updated_at, p.version, p.visits_count,
+  COUNT(v.id) AS visit_count,
+  MAX(v.visited_at) AS last_visited_at
+FROM pins p
+LEFT JOIN visits v ON v.pin_id = p.id
+GROUP BY p.id
+ORDER BY p.created_at DESC
+`
+
+type ListPinsWithVisitCountRow struct {
+	ID            int32              `db:"id" json:"id"`
+	Title         string             `db:"title" json:"title"`
+	Description   pgtype.Text        `db:"description" json:"description"`
+	Lat           float64            `db:"lat" json:"lat"`
+	Lng           float64            `db:"lng" json:"lng"`
+	Category      string             `db:"category" json:"category"`
+	ImageUrl      pgtype.Text        `db:"image_url" json:"image_url"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Version       int32              `db:"version" json:"version"`
+	VisitsCount   pgtype.Int4        `db:"visits_count" json:"visits_count"`
+	VisitCount    int64              `db:"visit_count" json:"visit_count"`
+	LastVisitedAt interface{}        `db:"last_visited_at" json:"last_visited_at"`
+}
+
+func (q *Queries) ListPinsWithVisitCount(ctx context.Context) ([]ListPinsWithVisitCountRow, error) {
+	rows, err := q.db.Query(ctx, listPinsWithVisitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPinsWithVisitCountRow
+	for rows.Next() {
+		var i ListPinsWithVisitCountRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+			&i.VisitCount,
+			&i.LastVisitedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markUpdateViewed = `-- name: MarkUpdateViewed :one
 INSERT INTO user_updates_viewed (user_id, update_id)
 VALUES ($1, $2)
@@ -715,6 +1542,46 @@ func (q *Queries) RemovePinFromPatrolPlan(ctx context.Context, arg RemovePinFrom
 	return err
 }
 
+const searchPins = `-- name: SearchPins :many
+SELECT id, title, description, lat, lng, category, image_url, created_at, updated_at, version, visits_count FROM pins
+WHERE
+  title ILIKE '%' || $1 || '%'
+  OR description ILIKE '%' || $1 || '%'
+ORDER BY created_at DESC
+`
+
+func (q *Queries) SearchPins(ctx context.Context, dollar_1 pgtype.Text) ([]Pin, error) {
+	rows, err := q.db.Query(ctx, searchPins, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Pin
+	for rows.Next() {
+		var i Pin
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Lat,
+			&i.Lng,
+			&i.Category,
+			&i.ImageUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.VisitsCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setPasswordHash = `-- name: SetPasswordHash :exec
 UPDATE users
 SET password_hash = $2, must_change_password = false
@@ -732,9 +1599,9 @@ func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams
 }
 
 const updateCategory = `-- name: UpdateCategory :one
-UPDATE categories 
-SET color = $2 
-WHERE name = $1 
+UPDATE categories
+SET color = $2
+WHERE name = $1
 RETURNING name, color
 `
 

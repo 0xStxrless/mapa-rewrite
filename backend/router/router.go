@@ -45,18 +45,19 @@ func NewRouter(h *App) http.Handler {
 		r.Put("/visit", h.UpdateVisit)              // valid (doesn't have id in url since the id is in the body)
 
 		// patrol plans
-		r.Get("/patrol-plans", h.ListPatrolPlans)
-		r.Get("/patrol-plan/{id}", h.GetPatrolPlan)
-		r.Get("/patrol-plan/{id}/pins", h.GetPatrolPlanWithPins)
-		r.Post("/patrol-plans", h.CreatePatrolPlan)
-		r.Delete("/patrol-plan/{id}", h.DeletePatrolPlan)
-		r.Post("/patrol-plan/{id}/pins", h.AddPinToPatrolPlan)
-		r.Delete("/patrol-plan/{id}/pins/{pin_id}", h.RemovePinFromPatrolPlan)
+		r.Get("/patrol-plans", h.ListPatrolPlans)                              // valid
+		r.Get("/patrol-plan/{id}", h.GetPatrolPlan)                            // valid
+		r.Get("/patrol-plan/{id}/pins", h.GetPatrolPlanWithPins)               // valid
+		r.Post("/patrol-plans", h.CreatePatrolPlan)                            // valid
+		r.Delete("/patrol-plan/{id}", h.DeletePatrolPlan)                      // valid
+		r.Post("/patrol-plan/{id}/pins", h.AddPinToPatrolPlan)                 //valid
+		r.Delete("/patrol-plan/{id}/pins/{pin_id}", h.RemovePinFromPatrolPlan) // valid
 
 		// stats
-		r.Post("/stats", h.UpsertStreetworkStat)
-		r.Get("/stats/month/{month}", h.GetStatsByMonth)
-		r.Get("/stats/worker/{worker}", h.GetStatsByWorker)
+		r.Post("/stats", h.UpsertStreetworkStat)            // valid
+		r.Get("/stats/month/{month}", h.GetStatsByMonth)    // valid
+		r.Get("/stats/worker/{worker}", h.GetStatsByWorker) // valid
+		r.Get("/all-stats", h.GetAllStats)                  // valid
 
 		// app updates
 		r.Get("/updates", h.ListAppUpdates)                        // not needed for now

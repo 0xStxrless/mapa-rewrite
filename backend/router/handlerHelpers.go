@@ -123,3 +123,9 @@ func loggerFromCtx(ctx context.Context) *slog.Logger {
 	}
 	return slog.Default()
 }
+
+// checks if a string is a valid month format (e.g. 2023-01)
+func validMonth(month string) bool {
+	_, err := time.Parse("2006-01", month)
+	return err == nil
+}

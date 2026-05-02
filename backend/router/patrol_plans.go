@@ -92,6 +92,10 @@ func (h *App) GetPatrolPlanWithPins(w http.ResponseWriter, r *http.Request) {
 		h.logError("Couldn't fetch patrol plan pins", w, r, http.StatusInternalServerError, err)
 		return
 	}
+	if rows == nil {
+		h.logError("Couldn't fetch any patrol plan for this pin", w, r, http.StatusBadRequest, nil)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(rows)
@@ -109,6 +113,14 @@ func (h *App) AddPinToPatrolPlan(w http.ResponseWriter, r *http.Request) {
 		h.logError("Invalid parameters", w, r, http.StatusBadRequest, err)
 		return
 	}
+
+	if params.PinID <= 0 {
+		h.logError("Pin ID cannot be lower than 0", w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	// params.SortOrder this needs to be implemented
+
 	params.PatrolPlanID = int32(planID)
 
 	entry, err := h.Queries.AddPinToPatrolPlan(r.Context(), params)
