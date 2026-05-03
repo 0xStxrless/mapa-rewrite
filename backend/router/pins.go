@@ -54,7 +54,6 @@ func (h *App) GetPins(w http.ResponseWriter, r *http.Request) {
 		h.logError("Error fetching pins:", w, r, http.StatusInternalServerError, err)
 		return
 	}
-	h.logError("Fetched pins:", w, r, http.StatusOK, nil)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(pins)
 }

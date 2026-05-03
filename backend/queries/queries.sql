@@ -316,3 +316,6 @@ INSERT INTO user_updates_viewed (user_id, update_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING
 RETURNING *;
+
+-- name: SelectWorkers :many
+SELECT DISTINCT worker_name FROM streetwork_stats;

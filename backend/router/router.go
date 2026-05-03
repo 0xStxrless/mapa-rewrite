@@ -58,6 +58,8 @@ func NewRouter(h *App) http.Handler {
 		r.Get("/stats/month/{month}", h.GetStatsByMonth)    // valid
 		r.Get("/stats/worker/{worker}", h.GetStatsByWorker) // valid
 		r.Get("/all-stats", h.GetAllStats)                  // valid
+		
+		r.Get("/workers", h.GetWorkers)
 
 		// app updates
 		r.Get("/updates", h.ListAppUpdates)                        // not needed for now
@@ -66,5 +68,18 @@ func NewRouter(h *App) http.Handler {
 		r.Post("/updates/viewed", h.MarkUpdateViewed)              // not needed for now
 	})
 
-	return h.requestLogger(r)
+	return h.requestLogger(corsMiddleware(r))
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

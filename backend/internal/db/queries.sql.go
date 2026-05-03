@@ -1582,6 +1582,30 @@ func (q *Queries) SearchPins(ctx context.Context, dollar_1 pgtype.Text) ([]Pin, 
 	return items, nil
 }
 
+const selectWorkers = `-- name: SelectWorkers :many
+SELECT DISTINCT worker_name FROM streetwork_stats
+`
+
+func (q *Queries) SelectWorkers(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, selectWorkers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var worker_name string
+		if err := rows.Scan(&worker_name); err != nil {
+			return nil, err
+		}
+		items = append(items, worker_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setPasswordHash = `-- name: SetPasswordHash :exec
 UPDATE users
 SET password_hash = $2, must_change_password = false
