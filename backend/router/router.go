@@ -39,6 +39,7 @@ func NewRouter(h *App) http.Handler {
 		r.Put("/category", h.UpdateCategory)               // valid (doesn't have category in url since the name is the identifier)
 
 		// visits
+		r.Get("/visits/range", h.GetVisitsByDateRange)
 		r.Post("/visits", h.CreateVisit)            // valid
 		r.Delete("/visit/{id}", h.DeleteVisit)      // valid
 		r.Get("/visits/pin/{id}", h.GetVisitsByPin) // valid

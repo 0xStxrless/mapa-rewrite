@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/0xstxrless/punkt/backend/internal/db"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (h *App) CreateVisit(w http.ResponseWriter, r *http.Request) {
@@ -107,4 +109,60 @@ func (h *App) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(visit)
+}
+
+func (h *App) GetVisitsByDateRange(w http.ResponseWriter, r *http.Request) {
+	start := r.URL.Query().Get("start")
+	end := r.URL.Query().Get("end")
+
+	start, err := h.sanitize(start, 10)
+	if err != nil {
+		h.logError("Invalid start date", w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	end, err = h.sanitize(end, 10)
+	if err != nil {
+		h.logError("Invalid end date", w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if start == "" || end == "" {
+		h.logError("start and end are required", w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	// validate date format YYYY-MM-DD
+	_, err = time.Parse("2006-01-02", start)
+	if err != nil {
+		h.logError("Invalid start date format, use YYYY-MM-DD", w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	_, err = time.Parse("2006-01-02", end)
+	if err != nil {
+		h.logError("Invalid end date format, use YYYY-MM-DD", w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	visits, err := h.Queries.GetVisitsByDateRange(r.Context(), db.GetVisitsByDateRangeParams{
+		VisitedAt: pgtype.Timestamptz{Time: mustParseDate(start), Valid: true},
+		VisitedAt_2:   pgtype.Timestamptz{Time: mustParseDateEnd(end), Valid: true},
+	})
+	if err != nil {
+		h.logError("Failed to fetch visits", w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	json.NewEncoder(w).Encode(&visits)
+}
+
+func mustParseDate(s string) time.Time {
+    t, _ := time.Parse("2006-01-02", s)
+    return t
+}
+
+func mustParseDateEnd(s string) time.Time {
+    t, _ := time.Parse("2006-01-02", s)
+    return t.Add(24*time.Hour - time.Second)
 }

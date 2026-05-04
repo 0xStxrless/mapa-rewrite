@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import Map from '$lib/Map.svelte';
 	import { getPins } from '$lib/api';
 	import type { Pin } from '$lib/types';
@@ -7,6 +8,7 @@
 
 	let pins: Pin[] = $state([]);
 	let showList = $state(false);
+	let flyTo: { lat: number; lng: number; zoom: number } | null = $state(null);
 
 	// sync store to local state
 	showPinList.subscribe((v) => (showList = v));
@@ -14,12 +16,18 @@
 	let pinListEl: HTMLDivElement;
 
 	onMount(async () => {
+		const lat = Number(page.url.searchParams.get('lat'));
+		const lng = Number(page.url.searchParams.get('lng'));
+		const zoom = Number(page.url.searchParams.get('zoom')) || 16;
+		if (lat && lng) flyTo = { lat, lng, zoom };
+
 		try {
 			pins = await getPins();
 		} catch (e) {
 			console.error(e);
 		}
 	});
+
 	function skipToList() {
 		showList = true;
 		setTimeout(() => pinListEl?.focus(), 50);
@@ -44,7 +52,7 @@
 		Interaktywna mapa z punktami streetworkowymi. Użyj listy poniżej mapy, aby przeglądać punkty za
 		pomocą klawiatury.
 	</p>
-	<Map />
+	<Map {flyTo} />
 </div>
 <div bind:this={pinListEl} id="pin-list" tabindex="-1" class="absolute right-4 bottom-4 z-100">
 	<button

@@ -43,6 +43,17 @@ export interface Visit {
 	visited_at: string;
 }
 
+export interface VisitWithPin {
+	id: number;
+	pin_id: number;
+	name: string;
+	note: { String: string; Valid: boolean } | null;
+	image_url: { String: string; Valid: boolean } | null;
+	visited_at: string;
+	pin_title: string;
+	pin_category: string;
+}
+
 export interface PatrolPlan {
 	id: number;
 	name: string;

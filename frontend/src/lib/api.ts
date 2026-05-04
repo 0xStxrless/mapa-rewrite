@@ -10,6 +10,7 @@ import type {
 	CreatePatrolPlanInput,
 	StreetworkStat,
 	UpsertStatInput,
+	VisitWithPin,
 	AppUpdate
 } from './types';
 
@@ -63,6 +64,8 @@ export const createVisit = (data: CreateVisitInput) => request<Visit>('POST', '/
 export const deleteVisit = (id: number) => request<void>('DELETE', `/visit/${id}`);
 export const getVisitsByPin = (id: number) => request<Visit[]>('GET', `/visits/pin/${id}`);
 export const updateVisit = (data: Visit) => request<Visit>('PUT', '/visit', data);
+export const getVisitsByRange = (start: string, end: string) =>
+	request<VisitWithPin[]>('GET', `/visits/range?start=${start}&end=${end}`);
 
 // Patrol Plans
 export const getPatrolPlans = () => request<PatrolPlan[]>('GET', '/patrol-plans');
