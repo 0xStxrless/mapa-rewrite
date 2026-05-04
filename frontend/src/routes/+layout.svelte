@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth';
 	import { onMount } from 'svelte';
+	import { showPinList } from '$lib/stores';
 	import '../app.css';
 
 	let { children } = $props();
@@ -18,12 +19,23 @@
 </script>
 
 <div class="flex h-screen w-screen flex-col overflow-hidden bg-gray-950">
+	<button
+		type="button"
+		onclick={() => {
+			showPinList.set(true);
+			setTimeout(() => document.getElementById('pin-list')?.focus(), 50);
+		}}
+		class="skip-link"
+	>
+		Pomiń mapę i przejdź do listy punktów
+	</button>
+
 	<!-- Navbar -->
 	<nav
 		class="z-50 flex shrink-0 items-center justify-between border-b border-gray-800 bg-gray-950 px-4 py-2"
 	>
 		<div class="flex items-center gap-2">
-			<span class="text-sm font-bold tracking-widest text-white">PUNKT</span>
+			<a href="/" class="text-sm font-bold tracking-widest text-white">PUNKT</a>
 
 			<button
 				type="button"

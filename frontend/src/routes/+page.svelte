@@ -3,8 +3,13 @@
 	import Map from '$lib/Map.svelte';
 	import { getPins } from '$lib/api';
 	import type { Pin } from '$lib/types';
+	import { showPinList } from '$lib/stores';
+
 	let pins: Pin[] = $state([]);
 	let showList = $state(false);
+
+	// sync store to local state
+	showPinList.subscribe((v) => (showList = v));
 
 	let pinListEl: HTMLDivElement;
 
@@ -21,18 +26,19 @@
 	}
 </script>
 
-<button
+<!-- <button
 	type="button"
 	onclick={skipToList}
 	class="sr-only text-sm font-medium focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-blue-600 focus:px-4 focus:py-2 focus:text-white"
 >
 	Pomiń mapę i przejdź do listy punktów
-</button>
+</button> -->
 <div
 	class="absolute inset-0"
 	role="application"
 	aria-label="Mapa punktów streetworkowych"
 	aria-describedby="map-desc"
+	tabindex="-1"
 >
 	<p id="map-desc" class="sr-only">
 		Interaktywna mapa z punktami streetworkowymi. Użyj listy poniżej mapy, aby przeglądać punkty za
@@ -40,7 +46,7 @@
 	</p>
 	<Map />
 </div>
-<div id="pin-list" tabindex="-1" class="absolute right-4 bottom-4 z-50" bind:this={pinListEl}>
+<div bind:this={pinListEl} id="pin-list" tabindex="-1" class="absolute right-4 bottom-4 z-100">
 	<button
 		type="button"
 		onclick={() => (showList = !showList)}
